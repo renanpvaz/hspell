@@ -8,10 +8,11 @@ import qualified Debug.Trace                   as Debug
 import qualified Data.List                     as List
 import           System.IO
 import           Data.List.Split                ( wordsBy )
+import Control.Monad
 
 letters = ['a' .. 'z']
 
-known counts = filter (\w -> Map.member w counts)
+known counts = filter (`Map.member` counts)
 
 split n word
   | n <= length word = (take n word, drop n word) : split (n + 1) word
@@ -20,12 +21,10 @@ split n word
 
 filterNullR = filter ((/=) "" . snd)
 
-
 deletes = map (\(l, _ : r) -> l ++ r) . filterNullR
 
 transposes =
   map (\(l, a : b : rest) -> l ++ b : a : rest) . filter ((<) 1 . length . snd)
-
 
 replaces =
   concatMap (\(l, _ : rest) -> map (\c -> l ++ c : rest) letters) . filterNullR
@@ -59,22 +58,21 @@ freq :: String -> Map.Map String Int -> Int
 freq word counts =
   fromMaybe 0 $ Map.lookup word counts
 
-probability :: Fractional a => String -> Map.Map String Int -> a
-probability word counts =
+probability counts word =
   let n = fromIntegral $ sum $ Map.elems counts
-      f = fromIntegral $ (freq word counts)
+      f = fromIntegral $ freq word counts
   in f / n
 
-
-candidates word counts =
+candidates counts word =
   known counts [word] ++ known counts (Set.toList $ edits word)
 
+correction counts =
+  head . List.sortOn (negate . probability counts) . candidates counts
+
 main :: IO ()
-main = do
-  handle   <- openFile "words.txt" ReadMode
+main =
+  withFile "words.txt" ReadMode (\handle -> do
   contents <- hGetContents handle
   input <- getLine
   let counts = wordCount $ wordsBy (not . isLetter) contents
-  putStr $ show $ candidates input counts
-  -- putStr $ show $ mostCommon $ wordCount $ wordsBy (not . isLetter) contents
-  hClose handle
+  putStr $ show $ correction counts input)
