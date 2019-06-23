@@ -20,3 +20,4 @@ executable spelling-corrector
   build-depends:       base >= 4.7 && < 5
                       , containers
                       , split
+                      , strict
