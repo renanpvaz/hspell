@@ -1,13 +1,13 @@
-name:                spelling-corrector
+name:                hspell
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/spelling-corrector#readme
+homepage:            https://github.com/githubuser/hspell
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2019 Author name here
+author:              Renan Vaz
+maintainer:          renan.piresvz@gmail.com
+copyright:           2019 Renan Vaz
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
@@ -21,3 +21,4 @@ executable spelling-corrector
                       , containers
                       , split
                       , strict
+                      , mtl
