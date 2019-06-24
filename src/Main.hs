@@ -1,97 +1,66 @@
 module Main where
 
-import qualified Data.Set                      as Set
-import           Data.Char
-import           Data.Maybe
-import qualified Data.Map                      as Map
-import qualified Debug.Trace                   as Debug
-import qualified Data.List                     as List
+import           WordCount                      ( WordCount
+                                                , fromFile
+                                                , probability
+                                                )
 import           System.IO
 import           Data.List.Split                ( wordsBy )
 import           Control.Monad
 import           Control.Monad.Reader
 
-type WordCount = Map.Map String Int
-
-rightNotNull = filter ((/=) "" . snd)
-
-withLetters f = concatMap (\split' -> map (f split') ['a' .. 'z'])
-
-words' = wordsBy (not . isLetter)
+import qualified Data.Set                      as Set
+import qualified Data.Map                      as Map
+import qualified Debug.Trace                   as Debug
+import qualified Data.List                     as List
 
 split :: Int -> String -> [(String, String)]
 split n word
   | n <= length word = (take n word, drop n word) : split (n + 1) word
   | otherwise        = []
 
-deletes :: [(String, String)] -> [String]
-deletes = map (\(l, _ : r) -> l ++ r) . rightNotNull
+notNull = (/=) ""
 
-transposes :: [(String, String)] -> [String]
-transposes =
-  map (\(l, a : b : rest) -> l ++ b : a : rest) . filter ((<) 1 . length . snd)
+edits1 :: String -> Set.Set String
+edits1 word = Set.fromList $ deletes ++ transposes ++ replaces ++ inserts
+ where
+  letters = ['a' .. 'z']
+  withLetters f = concatMap (\split' -> map (f split') letters)
+  splits     = split 0 word
+  deletes    = [ l ++ r | (l, r) <- splits, notNull r ]
+  transposes = [ l ++ b : a : rs | (l, a : b : rs@r) <- splits, length r > 1 ]
+  replaces   = withLetters (\(l, _ : rs) letter -> l ++ letter : rs)
+    $ filter (notNull . snd) splits
+  inserts = withLetters (\(l, r) letter -> l ++ letter : r) splits
 
-replaces :: [(String, String)] -> [String]
-replaces = withLetters (\(l, _ : rest) c -> l ++ c : rest) . rightNotNull
-
-inserts :: [(String, String)] -> [String]
-inserts = withLetters (\(l, r) c -> l ++ c : r)
-
-edits :: String -> Set.Set String
-edits word =
-  let splits = split 0 word
-  in  Set.fromList
-        $  deletes splits
-        ++ transposes splits
-        ++ replaces splits
-        ++ inserts splits
-
-lower :: String -> String
-lower = map toLower
-
-countOne :: WordCount -> String -> WordCount
-countOne counts word =
-  let word' = lower word
-  in  case Map.lookup word' counts of
-        Just c  -> Map.insert word' (c + 1) counts
-        Nothing -> Map.insert word' 1 counts
-
-wordCount :: String -> WordCount
-wordCount = foldl countOne Map.empty . words'
-
-freq :: WordCount -> String -> Int
-freq count word = fromMaybe 0 $ Map.lookup word count
-
-probability :: Fractional a => WordCount -> String -> a
-probability count word =
-  let n = fromIntegral $ sum $ Map.elems count
-      f = fromIntegral $ freq count word
-  in  f / n
+edits2 :: String -> Set.Set String
+edits2 = Set.fromList . concatMap (Set.toList . edits1) . edits1
 
 known :: [String] -> Reader WordCount [String]
 known words = do
   count <- ask
-  return $ filter (`Map.member` count) words
+  pure $ filter (`Map.member` count) words
+
+pickOne :: [[a]] -> [a]
+pickOne []           = []
+pickOne ([]  : tail) = pickOne tail
+pickOne (one : _   ) = one
 
 candidates :: String -> Reader WordCount [String]
 candidates word = do
-  a <- known [word]
-  b <- known (Set.toList $ edits word)
-  case a of
-    [] -> return b
-    _  -> return a
+  set0 <- known [word]
+  set1 <- known (Set.toList $ edits1 word)
+  set2 <- known (Set.toList $ edits2 word)
+  pure $ pickOne [set0, set1, set2, [word]]
 
 correction :: String -> Reader WordCount String
 correction word = do
   count <- ask
   c     <- candidates word
-  return $ head $ List.sortOn (negate . probability count) c
+  pure $ head $ List.sortOn (negate . WordCount.probability count) c
 
 main :: IO ()
 main = do
-  handle   <- openFile "words.txt" ReadMode
-  contents <- hGetContents handle
-  input    <- getLine
-  putStr $ show $ map (\w -> runReader (correction w) (wordCount contents))
-                      (words' input)
-  hClose handle
+  count <- WordCount.fromFile "words.txt"
+  input <- getLine
+  putStr $ show $ map (\w -> runReader (correction w) count) (words input)
