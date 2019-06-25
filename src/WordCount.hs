@@ -1,4 +1,9 @@
-module WordCount (WordCount, fromFile, probability) where
+module WordCount
+  ( WordCount
+  , fromFile
+  , probability
+  )
+where
 
 import qualified Data.Map                      as Map
 import           Data.List.Split                ( wordsBy )
@@ -17,11 +22,9 @@ lower = map toLower
 countWords :: String -> WordCount
 countWords = foldl go Map.empty . words'
  where
-  go counts word =
-    let word' = lower word
-    in  case Map.lookup word' counts of
-          Just c  -> Map.insert word' (c + 1) counts
-          Nothing -> Map.insert word' 1 counts
+  go count word =
+    let loweredWord = lower word
+    in  Map.insert loweredWord (freq count loweredWord + 1) count
 
 freq :: WordCount -> String -> Int
 freq c word = fromMaybe 0 $ Map.lookup word c
@@ -33,5 +36,4 @@ probability c word = f / n
   f = fromIntegral $ freq c word
 
 fromFile :: FilePath -> IO WordCount
-fromFile path =
-  countWords <$> readFile path
+fromFile path = countWords <$> readFile path
